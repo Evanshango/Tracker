@@ -4,6 +4,7 @@ import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 
 import android.app.ProgressDialog;
+import android.content.Intent;
 import android.os.Bundle;
 import android.util.Patterns;
 import android.view.View;
@@ -48,7 +49,6 @@ public class SignInActivity extends AppCompatActivity {
     }
 
     private void login() {
-        mDialog.setTitle("Logging In");
         mDialog.setMessage("Please wait...");
         mDialog.show();
 
@@ -62,6 +62,8 @@ public class SignInActivity extends AppCompatActivity {
                         if (task.isSuccessful()) {
                             mDialog.dismiss();
                             Toast.makeText(SignInActivity.this, "Success", Toast.LENGTH_SHORT).show();
+                            finish();
+                            startActivity(new Intent(SignInActivity.this, HomeActivity.class));
                         } else {
                             mDialog.dismiss();
                             Toast.makeText(SignInActivity.this, "Wrong Email or Password", Toast.LENGTH_SHORT).show();

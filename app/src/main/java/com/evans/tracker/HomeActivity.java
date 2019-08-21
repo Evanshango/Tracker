@@ -1,13 +1,34 @@
 package com.evans.tracker;
 
+import android.Manifest;
 import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.location.Location;
+import android.os.Build;
 import android.os.Bundle;
 
+import com.google.android.gms.common.ConnectionResult;
+import com.google.android.gms.common.api.GoogleApi;
+import com.google.android.gms.common.api.GoogleApiClient;
+import com.google.android.gms.location.LocationListener;
+import com.google.android.gms.location.LocationRequest;
+import com.google.android.gms.location.LocationServices;
+import com.google.android.gms.maps.CameraUpdate;
+import com.google.android.gms.maps.CameraUpdateFactory;
+import com.google.android.gms.maps.GoogleMap;
+import com.google.android.gms.maps.OnMapReadyCallback;
+import com.google.android.gms.maps.SupportMapFragment;
+import com.google.android.gms.maps.model.LatLng;
+import com.google.android.gms.maps.model.LatLngBounds;
+import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.android.material.snackbar.Snackbar;
 
 import android.view.View;
 
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import androidx.core.app.ActivityCompat;
 import androidx.core.view.GravityCompat;
 import androidx.appcompat.app.ActionBarDrawerToggle;
 
@@ -26,10 +47,18 @@ import android.view.Menu;
 import android.widget.Toast;
 
 public class HomeActivity extends AppCompatActivity
-        implements NavigationView.OnNavigationItemSelectedListener {
+        implements NavigationView.OnNavigationItemSelectedListener,
+        OnMapReadyCallback, GoogleApiClient.ConnectionCallbacks,
+        GoogleApiClient.OnConnectionFailedListener, LocationListener {
 
     FirebaseAuth mAuth;
     FirebaseUser mUser;
+    GoogleMap mMap;
+
+    GoogleApiClient mClient;
+    LocationRequest mRequest;
+    LatLng mLatLng;
+    LatLngBounds mBounds;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -39,15 +68,14 @@ public class HomeActivity extends AppCompatActivity
         mAuth = FirebaseAuth.getInstance();
 
         Toolbar toolbar = findViewById(R.id.toolbar);
+        toolbar.setTitle("Home");
         setSupportActionBar(toolbar);
-        FloatingActionButton fab = findViewById(R.id.fab);
-        fab.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                Snackbar.make(view, "Replace with your own action", Snackbar.LENGTH_LONG)
-                        .setAction("Action", null).show();
-            }
-        });
+
+        SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager()
+                .findFragmentById(R.id.map);
+        assert mapFragment != null;
+        mapFragment.getMapAsync(this);
+
         DrawerLayout drawer = findViewById(R.id.drawer_layout);
         NavigationView navigationView = findViewById(R.id.nav_view);
         ActionBarDrawerToggle toggle = new ActionBarDrawerToggle(
@@ -55,18 +83,6 @@ public class HomeActivity extends AppCompatActivity
         drawer.addDrawerListener(toggle);
         toggle.syncState();
         navigationView.setNavigationItemSelectedListener(this);
-    }
-
-    @Override
-    protected void onStart() {
-        super.onStart();
-        mUser = mAuth.getCurrentUser();
-        if (mUser == null){
-            finish();
-            startActivity(new Intent(HomeActivity.this, MainActivity.class));
-        } else {
-            Toast.makeText(this, "Welcome!", Toast.LENGTH_SHORT).show();
-        }
     }
 
     @Override
@@ -107,22 +123,84 @@ public class HomeActivity extends AppCompatActivity
         // Handle navigation view item clicks here.
         int id = item.getItemId();
 
-        if (id == R.id.nav_home) {
+        if (id == R.id.nav_join_circle) {
             // Handle the camera action
-        } else if (id == R.id.nav_gallery) {
+        } else if (id == R.id.nav_my_circle) {
 
-        } else if (id == R.id.nav_slideshow) {
+        } else if (id == R.id.nav_joined_circle) {
 
-        } else if (id == R.id.nav_tools) {
+        } else if (id == R.id.nav_invite_members) {
 
-        } else if (id == R.id.nav_share) {
+        } else if (id == R.id.nav_share_location) {
 
-        } else if (id == R.id.nav_send) {
-
+        } else if (id == R.id.nav_sign_out) {
+            mUser = mAuth.getCurrentUser();
+            if (mUser != null) {
+                mAuth.signOut();
+                finish();
+                startActivity(new Intent(HomeActivity.this, MainActivity.class));
+            } else {
+                Toast.makeText(this, "Try again", Toast.LENGTH_SHORT).show();
+            }
         }
 
         DrawerLayout drawer = findViewById(R.id.drawer_layout);
         drawer.closeDrawer(GravityCompat.START);
         return true;
+    }
+
+    @Override
+    public void onMapReady(GoogleMap googleMap) {
+        mMap = googleMap;
+
+        mClient = new GoogleApiClient.Builder(this)
+                .addApi(LocationServices.API)
+                .addConnectionCallbacks(this)
+                .addOnConnectionFailedListener(this)
+                .build();
+
+        mClient.connect();
+    }
+
+    @Override
+    public void onConnected(@Nullable Bundle bundle) {
+        new LocationRequest();
+        mRequest = LocationRequest.create();
+        mRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
+        mRequest.setInterval(3000);
+
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+                != PackageManager.PERMISSION_GRANTED
+                && ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION)
+                != PackageManager.PERMISSION_GRANTED) {
+
+            return;
+        }
+        LocationServices.FusedLocationApi.requestLocationUpdates(mClient, mRequest, this);
+
+    }
+
+    @Override
+    public void onConnectionFailed(@NonNull ConnectionResult connectionResult) {
+
+    }
+
+    @Override
+    public void onConnectionSuspended(int i) {
+
+    }
+
+    @Override
+    public void onLocationChanged(Location location) {
+        if (location == null){
+            Toast.makeText(this, "Couldn't get location", Toast.LENGTH_SHORT).show();
+        } else {
+            mLatLng = new LatLng(location.getLatitude(), location.getLongitude());
+
+            MarkerOptions options = new MarkerOptions();
+            options.position(mLatLng);
+            options.title("I'm here");
+            mMap.addMarker(options);
+        }
     }
 }

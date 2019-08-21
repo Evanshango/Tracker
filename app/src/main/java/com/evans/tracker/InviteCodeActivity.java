@@ -13,22 +13,26 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import com.evans.tracker.models.User;
+import com.google.android.gms.tasks.Continuation;
 import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.OnFailureListener;
+import com.google.android.gms.tasks.OnSuccessListener;
 import com.google.android.gms.tasks.Task;
 import com.google.firebase.auth.AuthResult;
 import com.google.firebase.auth.FirebaseAuth;
-import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.storage.FirebaseStorage;
+import com.google.firebase.storage.StorageReference;
+import com.google.firebase.storage.UploadTask;
 
 import java.util.Objects;
 
 public class InviteCodeActivity extends AppCompatActivity {
 
     FirebaseAuth mAuth;
-    FirebaseUser mUser;
     DatabaseReference userRef;
+    StorageReference mStorageReference;
 
     ProgressDialog mDialog;
     TextView mInviteCode;
@@ -36,6 +40,7 @@ public class InviteCodeActivity extends AppCompatActivity {
 
     String name, email, password, date, isSharing, code, userId;
     Uri imageUri;
+    UploadTask mUploadTask;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -44,6 +49,7 @@ public class InviteCodeActivity extends AppCompatActivity {
 
         mAuth = FirebaseAuth.getInstance();
         userRef = FirebaseDatabase.getInstance().getReference("users");
+        mStorageReference = FirebaseStorage.getInstance().getReference().child("user_images");
 
         mDialog = new ProgressDialog(this);
 
@@ -62,6 +68,7 @@ public class InviteCodeActivity extends AppCompatActivity {
         });
     }
 
+    //perform user registration
     private void doRegister() {
         mDialog.setTitle("Creating Account");
         mDialog.setMessage("Please wait...");
@@ -71,7 +78,7 @@ public class InviteCodeActivity extends AppCompatActivity {
                 .addOnCompleteListener(new OnCompleteListener<AuthResult>() {
                     @Override
                     public void onComplete(@NonNull Task<AuthResult> task) {
-                        if (task.isSuccessful()){
+                        if (task.isSuccessful()) {
                             addUserDetails();
                         } else {
                             mDialog.dismiss();
@@ -89,21 +96,57 @@ public class InviteCodeActivity extends AppCompatActivity {
         });
     }
 
+    //send user details to db
     private void addUserDetails() {
-        userId = mAuth.getCurrentUser().getUid();
-        User user = new User(userId, name, email, code, "false", "na", "na", "na" );
+        userId = Objects.requireNonNull(mAuth.getCurrentUser()).getUid();
+        final User user = new User(userId, name, email, code, "false", "na", "na", "na");
         userRef.child(userId).setValue(user)
                 .addOnCompleteListener(new OnCompleteListener<Void>() {
                     @Override
                     public void onComplete(@NonNull Task<Void> task) {
-                        if (task.isSuccessful()){
+                        if (task.isSuccessful()) {
                             mDialog.dismiss();
-                            Toast.makeText(InviteCodeActivity.this, "Success", Toast.LENGTH_SHORT).show();
-                            finish();
-                            startActivity(new Intent(InviteCodeActivity.this, HomeActivity.class));
-                        } else {
-                            mDialog.dismiss();
-                            Toast.makeText(InviteCodeActivity.this, "Try again", Toast.LENGTH_SHORT).show();
+                            final StorageReference ref = mStorageReference.child(userId + ".jpg");
+                            ref.putFile(imageUri).addOnCompleteListener(new OnCompleteListener<UploadTask.TaskSnapshot>() {
+                                @Override
+                                public void onComplete(@NonNull final Task<UploadTask.TaskSnapshot> task) {
+                                    if (task.isSuccessful()) {
+                                        ref.getDownloadUrl().addOnSuccessListener(new OnSuccessListener<Uri>() {
+                                            @Override
+                                            public void onSuccess(Uri uri) {
+                                                if (task.isSuccessful()) {
+                                                    mDialog.dismiss();
+                                                    String downloadUrl = uri.toString();
+                                                    userRef.child(userId).child("imageUrl").setValue(downloadUrl)
+                                                            .addOnCompleteListener(new OnCompleteListener<Void>() {
+                                                                @Override
+                                                                public void onComplete(@NonNull Task<Void> task) {
+                                                                    if (task.isSuccessful()) {
+                                                                        mDialog.dismiss();
+                                                                        Toast.makeText(InviteCodeActivity.this, "Success", Toast.LENGTH_SHORT).show();
+                                                                        finish();
+                                                                        startActivity(new Intent(InviteCodeActivity.this, HomeActivity.class));
+                                                                    } else {
+                                                                        Toast.makeText(InviteCodeActivity.this, "Something went wrong", Toast.LENGTH_SHORT).show();
+                                                                    }
+                                                                }
+                                                            }).addOnFailureListener(new OnFailureListener() {
+                                                        @Override
+                                                        public void onFailure(@NonNull Exception e) {
+                                                            Toast.makeText(InviteCodeActivity.this, e.getMessage(), Toast.LENGTH_SHORT).show();
+                                                        }
+                                                    });
+                                                }
+                                            }
+                                        });
+                                    }
+                                }
+                            }).addOnFailureListener(new OnFailureListener() {
+                                @Override
+                                public void onFailure(@NonNull Exception e) {
+                                    Toast.makeText(InviteCodeActivity.this, e.getMessage(), Toast.LENGTH_SHORT).show();
+                                }
+                            });
                         }
                     }
                 })
@@ -115,9 +158,9 @@ public class InviteCodeActivity extends AppCompatActivity {
                         Toast.makeText(InviteCodeActivity.this, error, Toast.LENGTH_SHORT).show();
                     }
                 });
-
     }
 
+    //get info from previous intent
     private void fetchDetails() {
         Intent intent = getIntent();
         if (intent != null) {
